@@ -11,6 +11,8 @@ database_id = "2ca219f8-2030-422a-9a10-1b7f934ce28c"
 migrations_dir = "migrations"
 
 [vars]
+TURNSTILE_SITE_KEY = "0x4AAAAAAF2Ooc_mFE54Me_Z"
+FROM_EMAIL = "noreply@example.com"
 
 # AI 每日精选定时任务（每 6 小时一轮；还需把 AI_API_KEY 设为 Worker Secret）
 [triggers]

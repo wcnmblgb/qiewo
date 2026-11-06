@@ -6,8 +6,8 @@ compatibility_date = "2026-10-01"
 # 手动部署时把下面改成你自己的 database_id
 [[d1_databases]]
 binding = "DB"
-database_name = "forum-db"
-database_id = "REPLACE_WITH_YOUR_D1_ID"
+database_name = "gdjylt"
+database_id = "046f0672-3729-4906-ad45-bb789205669c"
 migrations_dir = "migrations"
 
 [vars]

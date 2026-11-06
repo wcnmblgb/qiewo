@@ -7,7 +7,7 @@ compatibility_date = "2026-10-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "gdjylt"
-database_id = "046f0672-3729-4906-ad45-bb789205669c"
+database_id = "2ca219f8-2030-422a-9a10-1b7f934ce28c"
 migrations_dir = "migrations"
 
 [vars]

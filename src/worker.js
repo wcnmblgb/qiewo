@@ -2220,7 +2220,7 @@ export default {
 
       return json({ error: '未知接口' }, 404);
     } catch (e) {
-      return json({ error: '服务器错误' }, 500);
+      return json({ error: e.message, stack: e.stack }, 500);
     }
   },
 

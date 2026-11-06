@@ -6,7 +6,7 @@ compatibility_date = "2026-10-01"
 # 手动部署时把下面改成你自己的 database_id
 [[d1_databases]]
 binding = "DB"
-database_name = "gdjylt"
+database_name = "gdjyltsql"
 database_id = "2ca219f8-2030-422a-9a10-1b7f934ce28c"
 migrations_dir = "migrations"
 

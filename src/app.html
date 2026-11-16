@@ -2266,7 +2266,8 @@ async function loadMcStatus(byUser){
       const p = j.players || {};
       let h = '<span><span class="k">在线人数</span><b>'+num(p.online)+'</b> / '+num(p.max)+'</span>'+
         '<span><span class="k">版本</span><b>'+esc(j.version || '未知')+'</b></span>';
-      if(j.ping!=null) h += '<span><span class="k">延迟</span><b>'+num(j.ping)+'</b> ms</span>';
+      // j.ping 是边缘节点访问 mcstatus.io 的 HTTP 往返耗时，不是玩家进服延迟，别写成"延迟"
+      if(j.ping!=null) h += '<span title="论坛服务器查询状态接口的耗时，与游戏内延迟无关"><span class="k">查询耗时</span><b>'+num(j.ping)+'</b> ms</span>';
       if(j.stale) h += '<span><span class="k">（缓存数据，源站暂不可达）</span></span>';
       stats.innerHTML = h;
       motd.textContent = j.motd || '';

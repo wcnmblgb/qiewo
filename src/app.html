@@ -2230,7 +2230,7 @@ function pager(page, per, total, base){
 }
 
 /* ---------- MC 服务器状态卡片 ---------- */
-const MC_SRV_HOST = 'mc.gdjy.dpdns.org';
+const MC_SRV_HOST = 'gdjy.dpdns.org';
 function mcStatusCard(){
   return '<div class="card mc-card" id="mc-card">'+
     '<button class="mc-refresh" id="mc-refresh" onclick="loadMcStatus(true)" title="刷新服务器状态" aria-label="刷新">'+
@@ -2253,8 +2253,10 @@ async function loadMcStatus(byUser){
   if(btn.classList.contains('loading')) return;
   btn.classList.add('loading');
   if(byUser) tag.textContent = '刷新中…';
+  const ctl = new AbortController();
+  const timer = setTimeout(()=>ctl.abort(), 12000);
   try{
-    const j = await api('/api/mc-status');
+    const j = await api('/api/mc-status', {signal: ctl.signal});
     const on = !!j.online;
     card.classList.toggle('on', on);
     card.classList.toggle('off', !on);
@@ -2278,11 +2280,13 @@ async function loadMcStatus(byUser){
   }catch(e){
     card.classList.remove('on');
     card.classList.add('off');
-    tag.textContent = '⚠️ 获取失败';
+    const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.name || ''));
+    tag.textContent = aborted ? '⏱️ 超时' : '⚠️ 获取失败';
     tag.className = 'mc-tag bad';
-    stats.innerHTML = '<span>状态接口暂不可用，稍后再试</span>';
+    stats.innerHTML = '<span>'+(aborted ? '状态接口 12 秒没响应，稍后点右上角 ⟳ 重试' : '状态接口暂不可用，稍后再试')+'</span>';
     motd.style.display = 'none';
   }finally{
+    clearTimeout(timer);
     btn.classList.remove('loading');
   }
 }

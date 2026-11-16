@@ -565,18 +565,37 @@ async function runAiDigest(env, opts) {
  * 所以借第三方 HTTP 镜像。任何一个源超时/报错/解析失败就换下一个，
  * 全挂时用本 isolate 上次成功的结果兜底（标记 stale），避免前端一直红着。
  */
-const MC_HOST = 'mc.gdjy.dpdns.org';
+// 玩家在游戏里填的就是主域 gdjy.dpdns.org（靠 _minecraft._tcp 的 SRV 记录转到 ofa 隧道端口）
+const MC_HOST = 'gdjy.dpdns.org';
 const MC_TIMEOUT = 5000;
 let mcLastGood = null;
 
 function stripMcColorCodes(s) {
   return String(s == null ? '' : s).replace(/§[0-9a-fk-orx]/gi, '').replace(/§./g, '');
 }
+// mcstatus.io 会把服务端返回的 UTF-8 MOTD 当 latin1 存，出现 "Â§" / "ä¸ª" 这类乱码；
+// 把这些字符按低 8 位还原成字节再按 UTF-8 解一遍即可。纯 ASCII / 本来正常的中文不受影响。
+function repairLatin1Utf8(s) {
+  const str = String(s == null ? '' : s);
+  if (!/[\u00c2\u00c3\u00e2]/.test(str)) return str;
+  try {
+    const bytes = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff;
+    const fixed = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    if (!fixed.includes('\ufffd')) return fixed;
+  } catch (e) {}
+  return str;
+}
 function cleanMotd(m) {
   if (!m) return '';
-  if (typeof m === 'string') return stripMcColorCodes(m).replace(/\s+/g, ' ').trim().slice(0, 300);
-  const txt = m.clean || stripMcColorCodes(m.raw || '');
-  return stripMcColorCodes(txt).replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (typeof m === 'string') m = repairLatin1Utf8(m);
+  else {
+    if (Array.isArray(m.clean)) m = m.clean.join('\n');
+    else if (typeof m.clean === 'string') m = m.clean;
+    else m = repairLatin1Utf8(Array.isArray(m.raw) ? m.raw.join('\n') : m.raw || '');
+  }
+  m = repairLatin1Utf8(m);
+  return stripMcColorCodes(m).replace(/\s+/g, ' ').trim().slice(0, 300);
 }
 async function mcFetchJson(url) {
   const started = Date.now();

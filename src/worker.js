@@ -560,8 +560,98 @@ async function runAiDigest(env, opts) {
   }
 }
 
+/* ---------- Minecraft 服务器状态：多源降级 ----------
+ * Workers 跑在 HTTP 边缘、拿不到裸 TCP 连接，无法直接说 Minecraft 协议，
+ * 所以借第三方 HTTP 镜像。任何一个源超时/报错/解析失败就换下一个，
+ * 全挂时用本 isolate 上次成功的结果兜底（标记 stale），避免前端一直红着。
+ */
+const MC_HOST = 'mc.gdjy.dpdns.org';
+const MC_TIMEOUT = 5000;
+let mcLastGood = null;
+
+function stripMcColorCodes(s) {
+  return String(s == null ? '' : s).replace(/§[0-9a-fk-orx]/gi, '').replace(/§./g, '');
+}
+function cleanMotd(m) {
+  if (!m) return '';
+  if (typeof m === 'string') return stripMcColorCodes(m).replace(/\s+/g, ' ').trim().slice(0, 300);
+  const txt = m.clean || stripMcColorCodes(m.raw || '');
+  return stripMcColorCodes(txt).replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+async function mcFetchJson(url) {
+  const started = Date.now();
+  const r = await fetch(url, {
+    headers: { 'Accept': 'application/json', 'User-Agent': 'qiewo-mcstatus/1.0' },
+    signal: AbortSignal.timeout(MC_TIMEOUT),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  if (!j || typeof j !== 'object') throw new Error('bad json');
+  return { json: j, rtt: Date.now() - started };
+}
+function normMcStatusIo(j, rtt) {
+  const v = j.version || {};
+  const p = j.players || {};
+  return {
+    online: !!j.online,
+    players: { online: Number(p.online) || 0, max: Number(p.max) || 0 },
+    version: String(v.name_clean || v.name_raw || v.name || '未知'),
+    motd: cleanMotd(j.motd),
+    ping: rtt,
+    source: 'mcstatus.io',
+    checked_at: Date.now(),
+  };
+}
+function normMcSrvStat(j, rtt) {
+  const p = j.players || {};
+  const ver = typeof j.version === 'string' ? j.version : (j.protocol && j.protocol.name) || '未知';
+  return {
+    online: !!j.online,
+    players: { online: Number(p.online) || 0, max: Number(p.max) || 0 },
+    version: String(ver || '未知'),
+    motd: cleanMotd(j.motd),
+    ping: rtt,
+    source: 'mcsrvstat.us',
+    checked_at: Date.now(),
+  };
+}
+async function fetchMcStatus() {
+  const sources = [
+    { name: 'mcstatus.io', url: 'https://api.mcstatus.io/v2/status/java/' + MC_HOST, norm: normMcStatusIo },
+    { name: 'mcsrvstat.us', url: 'https://api.mcsrvstat.us/3/' + MC_HOST, norm: normMcSrvStat },
+  ];
+  let offline = null;
+  for (const s of sources) {
+    try {
+      const { json: j, rtt } = await mcFetchJson(s.url);
+      const d = s.norm(j, rtt);
+      // 在线：直接用，写入兜底快照
+      if (d.online) { mcLastGood = d; return d; }
+      // 离线：先记下，继续问下一个源（单个源探测失败也会误报离线）
+      if (!offline) offline = d;
+    } catch (e) {
+      // 超时 / 网络错误 / 非 2xx / JSON 坏 → 降级到下一源
+    }
+  }
+  // 所有源都报离线 → 就是真离线，别拿旧快照骗人
+  if (offline) return offline;
+  // 所有源都请求失败（超时/网络）→ 用十分钟内的成功快照兜底，标记 stale
+  if (mcLastGood && Date.now() - (mcLastGood.checked_at || 0) < 10 * 60 * 1000) {
+    return { ...mcLastGood, stale: true };
+  }
+  return {
+    online: false,
+    players: { online: 0, max: 0 },
+    version: '未知',
+    motd: '',
+    source: null,
+    error: 'all-sources-failed',
+    checked_at: Date.now(),
+  };
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method.toUpperCase();
@@ -620,6 +710,26 @@ export default {
       }
       rss += '</channel></rss>';
       return new Response(rss, { headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', ...SEC_HEADERS } });
+    }
+
+    // ---------- MC 服务器状态代理：多源降级 + 30s 边缘缓存 ----------
+    if (path === '/api/mc-status' && method === 'GET') {
+      const cache = caches.default;
+      const cacheKey = new Request('https://mc-status.internal/mc-status', { method: 'GET' });
+      try {
+        const hit = await cache.match(cacheKey);
+        if (hit) {
+          return new Response(hit.body, {
+            status: hit.status,
+            headers: { ...SEC_HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=30', 'X-MC-Cache': 'hit' },
+          });
+        }
+      } catch (e) {}
+      const data = await fetchMcStatus();
+      const resp = json(data, 200, { 'Cache-Control': 'public, max-age=30', 'X-MC-Cache': 'miss' });
+      const put = cache.put(cacheKey, resp.clone()).catch(() => {});
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(put); else await put;
+      return resp;
     }
 
     // 前端页面（History API 路由：所有非 /api/ 路径都返回 SPA）

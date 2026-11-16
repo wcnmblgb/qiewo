@@ -279,6 +279,28 @@ footer{margin-bottom:24px}
 /* 小屏防拆行：按钮文案、主题元信息不再被挤成竖排 */
 .thread-tools button,.post .ops button,.toolbar .btn{white-space:nowrap;flex-shrink:0}
 .toolbar{flex-wrap:wrap}
+/* ---- 5. MC 服务器状态卡片 ---- */
+.mc-card{position:relative;padding-right:52px}
+.mc-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mc-dot{width:10px;height:10px;border-radius:50%;background:#9ca3af;flex:0 0 auto}
+.mc-card.on .mc-dot{background:#22c55e;animation:mc-pulse 2s ease-out infinite}
+.mc-card.off .mc-dot{background:#ef4444}
+@keyframes mc-pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 9px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.mc-host{font-weight:600;font-size:15px;letter-spacing:.2px;word-break:break-all}
+.mc-tag{font-size:11px;color:var(--muted);border:1px solid var(--glass-line);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.mc-tag.ok{color:#16a34a;border-color:rgba(22,163,74,.5);background-color:rgba(22,163,74,.12)}
+.mc-tag.bad{color:#ef4444;border-color:rgba(239,68,68,.5);background-color:rgba(239,68,68,.12)}
+.mc-stats{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:13px}
+.mc-stats .k{color:var(--muted);margin-right:4px}
+.mc-stats b{font-variant-numeric:tabular-nums}
+.mc-motd{margin-top:8px;font-size:13px;color:var(--muted);line-height:1.5;word-break:break-word}
+.mc-card.off .mc-stats,.mc-card.off .mc-motd{color:#9ca3af}
+.mc-refresh{position:absolute;top:10px;right:10px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--glass-line);background-color:var(--glass-bg-soft);color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0;transition:color .15s}
+.mc-refresh:hover{color:var(--primary)}
+.mc-refresh.loading .mc-ic{display:inline-block;animation:mc-spin .8s linear infinite}
+@keyframes mc-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.mc-card.on .mc-dot,.mc-refresh.loading .mc-ic{animation:none}}
+@media (max-width:520px){.mc-stats{gap:12px}.mc-card{padding-right:48px}}
 .thread .mt{flex-wrap:wrap}
 .thread .mt>span{white-space:nowrap}
 /* 移动端侧边抽屉：贴左不圆左上角 */
@@ -350,7 +372,7 @@ footer{margin-bottom:24px}
   <span style="cursor:pointer" onclick="navigate('/rules')">社区规范</span> ·
   <span style="cursor:pointer" onclick="navigate('/tools')">🧰 工具中心</span> ·
   <span id="foot-name">论坛</span> ·
-  Powered by Cloudflare Workers ·
+  肝帝家园 ·
   <a href="https://github.com/xiaoyang123520/qiewo" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">⭐ 开源</a>
 </footer>
 <button id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
@@ -2207,12 +2229,70 @@ function pager(page, per, total, base){
   return h+'</div>';
 }
 
+/* ---------- MC 服务器状态卡片 ---------- */
+const MC_SRV_HOST = 'mc.gdjy.dpdns.org';
+function mcStatusCard(){
+  return '<div class="card mc-card" id="mc-card">'+
+    '<button class="mc-refresh" id="mc-refresh" onclick="loadMcStatus(true)" title="刷新服务器状态" aria-label="刷新">'+
+      '<span class="mc-ic">⟳</span></button>'+
+    '<div class="mc-head"><span class="mc-dot"></span>'+
+      '<span class="mc-host">'+esc(MC_SRV_HOST)+'</span>'+
+      '<span class="mc-tag" id="mc-tag">检测中…</span></div>'+
+    '<div class="mc-stats" id="mc-stats"></div>'+
+    '<div class="mc-motd" id="mc-motd" style="display:none"></div>'+
+  '</div>';
+}
+async function loadMcStatus(byUser){
+  const card = document.getElementById('mc-card');
+  if(!card) return;
+  const btn = document.getElementById('mc-refresh');
+  const tag = document.getElementById('mc-tag');
+  const stats = document.getElementById('mc-stats');
+  const motd = document.getElementById('mc-motd');
+  const num = v => (v==null||v==='') ? '-' : v;
+  if(btn.classList.contains('loading')) return;
+  btn.classList.add('loading');
+  if(byUser) tag.textContent = '刷新中…';
+  try{
+    const j = await api('/api/mc-status');
+    const on = !!j.online;
+    card.classList.toggle('on', on);
+    card.classList.toggle('off', !on);
+    if(on){
+      tag.textContent = '🟢 在线';
+      tag.className = 'mc-tag ok';
+      const p = j.players || {};
+      let h = '<span><span class="k">在线人数</span><b>'+num(p.online)+'</b> / '+num(p.max)+'</span>'+
+        '<span><span class="k">版本</span><b>'+esc(j.version || '未知')+'</b></span>';
+      if(j.ping!=null) h += '<span><span class="k">延迟</span><b>'+num(j.ping)+'</b> ms</span>';
+      if(j.stale) h += '<span><span class="k">（缓存数据，源站暂不可达）</span></span>';
+      stats.innerHTML = h;
+      motd.textContent = j.motd || '';
+      motd.style.display = j.motd ? '' : 'none';
+    }else{
+      tag.textContent = '🔴 离线';
+      tag.className = 'mc-tag bad';
+      stats.innerHTML = '<span>服务器离线，修好以后点右上角 ⟳ 刷新</span>';
+      motd.style.display = 'none';
+    }
+  }catch(e){
+    card.classList.remove('on');
+    card.classList.add('off');
+    tag.textContent = '⚠️ 获取失败';
+    tag.className = 'mc-tag bad';
+    stats.innerHTML = '<span>状态接口暂不可用，稍后再试</span>';
+    motd.style.display = 'none';
+  }finally{
+    btn.classList.remove('loading');
+  }
+}
+
 /* ---------- 首页：最新主题 + 版块列表 ---------- */
 async function viewBoards(){
   app.innerHTML = '<div class="hint">加载中…</div>';
   setTitle('');
   const [bj, lj] = await Promise.all([api('/api/boards'), api('/api/threads/latest').catch(()=>({threads:[]}))]);
-  let html = verifyBanner() + announcementBanner();
+  let html = verifyBanner() + announcementBanner() + mcStatusCard();
   try{
     const st = await api('/api/stats');
     html += '<div class="stat-bar"><span><b>'+st.todayThreads+'</b>今日主题</span><span><b>'+st.todayPosts+'</b>今日回帖</span><span><b>'+st.todayUsers+'</b>今日新用户</span><span><b>'+st.users+'</b>总用户</span><span><b>'+st.threads+'</b>总主题</span></div>';
@@ -2233,6 +2313,7 @@ async function viewBoards(){
     html += '<div class="toolbar"><button class="btn" onclick="showAddBoard()">＋ 新建版块</button></div>';
   }
   app.innerHTML = html;
+  loadMcStatus();
 }
 function showAddBoard(){
   showModal('<h3>新建版块</h3><div class="err" id="m-err"></div>'+

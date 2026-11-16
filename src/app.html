@@ -368,10 +368,9 @@ footer{margin-bottom:24px}
 </div>
 <footer style="max-width:1100px;margin:0 auto;padding:20px 12px 40px;text-align:center;font-size:12px;color:var(--muted)">
   <div id="friend-links" style="margin-bottom:10px;line-height:2"></div>
-  <div id="footer-ad">'+''+'</div>
+  <div id="footer-ad"></div>
   <span style="cursor:pointer" onclick="navigate('/rules')">社区规范</span> ·
   <span style="cursor:pointer" onclick="navigate('/tools')">🧰 工具中心</span> ·
-  <span id="foot-name">论坛</span> ·
   肝帝家园 ·
   <a href="https://github.com/xiaoyang123520/qiewo" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">⭐ 开源</a>
 </footer>
@@ -425,7 +424,8 @@ async function loadSiteSettings(){
   }catch(e){}
   document.querySelector('header .logo').innerHTML = esc(siteSettings.site_logo) + ' ' + esc(siteSettings.site_name);
   document.title = siteSettings.site_name;
-  document.getElementById('foot-name').textContent = siteSettings.site_name;
+  const footName = document.getElementById('foot-name');
+  if(footName) footName.textContent = siteSettings.site_name;
 }
 function announcementBanner(){
   if(siteSettings.announcement){

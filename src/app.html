@@ -184,10 +184,138 @@ textarea{min-height:100px;resize:vertical}
 .post.solution-post{border:2px solid var(--primary);background:var(--hl)}
 .solution-badge{display:inline-block;font-size:11px;color:#fff;background:var(--primary);border-radius:4px;padding:1px 6px;margin-left:4px;font-weight:700}
 .floor-badge{font-size:11px;background:var(--bg);border-radius:6px;padding:1px 6px;color:var(--muted)}
+/* ============================================================
+   液态玻璃 · Glassmorphism 主题层（2026-11）
+   追加式覆盖：不改动上方原有规则，整层删除即回到旧皮肤
+   1 主题变量  2 背景层/遮罩  3 玻璃配方  4 组件适配  5 性能与降级
+   ============================================================ */
+/* ---- 1. 主题变量：实色 → 半透明玻璃色 ---- */
+:root{
+  --page-bg:#e9edf2;
+  --bg-mask:rgba(15,23,42,.28);
+  --glass-bg:rgba(255,255,255,.62);
+  --glass-bg-soft:rgba(255,255,255,.44);
+  --glass-line:rgba(255,255,255,.55);
+  --glass-sheen:linear-gradient(150deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.08) 38%,rgba(255,255,255,0) 72%);
+  --glass-blur:blur(12px) saturate(150%);
+  --glass-shadow:0 8px 32px rgba(15,23,42,.14);
+  --bg:rgba(255,255,255,.34);
+  --card:rgba(255,255,255,.62);
+  --input-bg:rgba(255,255,255,.55);
+  --border:rgba(15,23,42,.10);
+  --hover:rgba(255,255,255,.38);
+  --hl:rgba(22,163,74,.14);
+  --text:#1b222b;
+  --muted:#4f5a66;
+}
+[data-theme=dark]{
+  --page-bg:#0b0f14;
+  --bg-mask:rgba(0,0,0,.55);
+  --glass-bg:rgba(20,25,35,.60);
+  --glass-bg-soft:rgba(20,25,35,.44);
+  --glass-line:rgba(255,255,255,.10);
+  --glass-sheen:linear-gradient(150deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,.02) 38%,rgba(255,255,255,0) 72%);
+  --glass-blur:blur(12px) saturate(130%);
+  --glass-shadow:0 8px 32px rgba(0,0,0,.35);
+  --bg:rgba(255,255,255,.06);
+  --card:rgba(20,25,35,.60);
+  --input-bg:rgba(255,255,255,.05);
+  --border:rgba(255,255,255,.10);
+  --hover:rgba(255,255,255,.08);
+  --hl:rgba(63,185,80,.16);
+  --text:#e6edf3;
+  --muted:#a0aab5;
+}
+/* 全局底色清空：html 只留兜底底色，body 透明，让背景图透出来 */
+html{background:var(--page-bg)}
+body{background:transparent}
+/* ---- 2. 背景层 + 暗色遮罩（z-index 负值：永远在所有内容下方） ---- */
+.bg-img{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 55%;z-index:-2;pointer-events:none;user-select:none;-webkit-user-select:none;backface-visibility:hidden;transform:translateZ(0)}
+.bg-mask{position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--bg-mask)}
+/* 背景图加载失败时自动退化为纯色底，不会出现白底黑字 */
+html.bg-missing .bg-img,html.bg-missing .bg-mask{display:none}
+/* ---- 3. 玻璃配方：主容器统一毛玻璃 + 高光描边 ---- */
+header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer,.tabs button,.thread-tools button,.edtools button,.btn.ghost{
+  background-color:var(--glass-bg);
+  background-image:var(--glass-sheen);
+  -webkit-backdrop-filter:var(--glass-blur);
+  backdrop-filter:var(--glass-blur);
+  box-shadow:var(--glass-shadow);
+}
+.card,.post,.stat,.stat-bar,#sidebar,.emoji-picker,.at-list,.umenu,#toTop,footer,#modal .box,.tabs button,.thread-tools button,.edtools button{
+  border:1px solid var(--glass-line);
+  border-radius:16px;
+}
+header{border:1px solid var(--glass-line);border-top:none;border-radius:0 0 18px 18px}
+header .user button{background-color:var(--glass-bg-soft);border:1px solid var(--glass-line);border-radius:10px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* 下拉 / 弹层：玻璃更实一点，保证可读 */
+.umenu{border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.28)}
+#modal .box{border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(20px) saturate(160%);backdrop-filter:blur(20px) saturate(160%)}
+#modal{background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+#toTop{border-radius:50%}
+.tabs button,.thread-tools button,.edtools button,.btn.ghost{box-shadow:0 4px 14px rgba(15,23,42,.10)}
+/* 选中态的实色按钮不要叠高光层，避免发灰 */
+.tabs button.on,.thread-tools button.on{background-image:none;box-shadow:0 4px 14px rgba(22,163,74,.28)}
+/* ---- 4. 组件适配：输入框 / 分栏 / 细节 ---- */
+textarea,input[type=text],input[type=password],select{
+  background-color:var(--input-bg);
+  border:1.5px solid var(--glass-line);
+  border-radius:12px;
+  -webkit-backdrop-filter:blur(8px);
+  backdrop-filter:blur(8px);
+}
+[data-theme=dark] textarea,[data-theme=dark] input[type=text],[data-theme=dark] input[type=password],[data-theme=dark] select{border-color:var(--glass-line)}
+footer{margin-bottom:24px}
+.post .pc pre,.post .pc .quote-head,.hide-show,.quotebox,.emoji-picker{border-color:var(--glass-line)}
+/* 提示条：改用琥珀色玻璃，不再是一块死白/死亮的实色 */
+.banner-warn{border-color:rgba(245,158,11,.5);background-color:rgba(245,158,11,.14)}
+[data-theme=dark] .banner-warn{background-color:rgba(245,158,11,.16);border-color:rgba(245,158,11,.42)}
+/* 面包屑 / 独立提示：原来直接浮在照片上没有底，改成小玻璃条 */
+.crumb{display:inline-flex;align-items:center;font-size:13px;color:var(--muted);background-color:var(--glass-bg-soft);border:1px solid var(--glass-line);border-radius:10px;padding:4px 10px;margin-bottom:10px;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.crumb:hover{color:var(--primary)}
+#app>.hint{background-color:var(--glass-bg);border:1px solid var(--glass-line);border-radius:16px;box-shadow:var(--glass-shadow);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);padding:40px 20px}
+/* 代码块：深底必须配浅字，否则浅色主题下几乎看不见 */
+.post .pc pre{color:#e6edf3}
+/* 小屏防拆行：按钮文案、主题元信息不再被挤成竖排 */
+.thread-tools button,.post .ops button,.toolbar .btn{white-space:nowrap;flex-shrink:0}
+.toolbar{flex-wrap:wrap}
+.thread .mt{flex-wrap:wrap}
+.thread .mt>span{white-space:nowrap}
+/* 移动端侧边抽屉：贴左不圆左上角 */
+@media(max-width:1023px){
+  #sidebar{border-radius:0 16px 16px 0;border-left:none}
+}
+/* ---- 5. 性能与降级：小屏降模糊、不支持滤镜转实色 ---- */
+@media(max-width:640px){
+  :root{--glass-blur:blur(8px) saturate(150%);--bg-mask:rgba(15,23,42,.34)}
+  [data-theme=dark]{--glass-blur:blur(8px) saturate(120%);--bg-mask:rgba(0,0,0,.60)}
+  #modal .box{-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  header{border-radius:0 0 14px 14px}
+}
+/* 小屏顶栏换行：原来一串导航 + 一排按钮必然横向溢出，把页面撑出屏幕 */
+@media(max-width:720px){
+  header{flex-wrap:wrap;row-gap:6px;padding:8px 10px}
+  header .user{flex:1 1 100%;justify-content:flex-end;flex-wrap:wrap;row-gap:6px;min-width:0}
+}
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  :root{--glass-bg:rgba(255,255,255,.90);--glass-bg-soft:rgba(255,255,255,.80);--input-bg:rgba(255,255,255,.86)}
+  [data-theme=dark]{--glass-bg:rgba(18,23,32,.94);--glass-bg-soft:rgba(18,23,32,.88);--input-bg:rgba(255,255,255,.08)}
+}
+@media(prefers-reduced-transparency:reduce){
+  :root{--glass-bg:rgba(255,255,255,.92);--glass-bg-soft:rgba(255,255,255,.86);--input-bg:rgba(255,255,255,.9)}
+  [data-theme=dark]{--glass-bg:rgba(18,23,32,.95);--glass-bg-soft:rgba(18,23,32,.9);--input-bg:rgba(255,255,255,.08)}
+  header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer{background-image:none}
+}
 </style>
 <link rel="alternate" type="application/rss+xml" title="企鹅窝" href="/rss">
+<link rel="preload" as="image" href="/202606191805131553675.jpg" fetchpriority="high">
+<meta name="theme-color" content="#0b0f14">
 </head>
 <body>
+<!-- 全屏背景层：独立固定定位 <img>，走 GPU 合成，滚动比 CSS background-image 更跟手 -->
+<img class="bg-img" src="/202606191805131553675.jpg" alt="" aria-hidden="true" decoding="async" fetchpriority="high" onerror="document.documentElement.classList.add('bg-missing')">
+<!-- 背景图之上、内容之下的暗色遮罩，保证文字可读 -->
+<div class="bg-mask" aria-hidden="true"></div>
 <header>
   <div style="display:flex;align-items:center;gap:8px">
     <button id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
@@ -792,7 +920,7 @@ async function resendVerification(){
 }
 function verifyBanner(){
   if(me && !me.verified){
-    return '<div class="card" style="border-color:#f59e0b;background:#fffbeb">📧 邮箱未验证，发帖、回帖、私信功能受限。<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:13px;margin-left:8px" onclick="resendVerification()">重发验证邮件</button></div>';
+    return '<div class="card banner-warn">📧 邮箱未验证，发帖、回帖、私信功能受限。<button class="btn ghost" style="width:auto;padding:6px 12px;font-size:13px;margin-left:8px" onclick="resendVerification()">重发验证邮件</button></div>';
   }
   return '';
 }

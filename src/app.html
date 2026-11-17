@@ -328,6 +328,153 @@ footer{margin-bottom:24px}
   [data-theme=dark]{--glass-bg:rgba(18,23,32,.95);--glass-bg-soft:rgba(18,23,32,.9);--input-bg:rgba(255,255,255,.08)}
   header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer{background-image:none}
 }
+/* ============================================================
+   液态玻璃 2.0 · Liquid Glass
+   参考 https://github.com/ybouane/liquidglass 的玻璃配方：
+   blur + 增饱和 + 镜面高光(specular) + 边缘高光(edgeHighlight)
+   + 菲涅尔亮边(fresnel) + 左右微色散(chromAberration)
+   + 玻璃厚度内高光 + 柔和落影 + 高光跟随指针。
+   实现：纯 CSS + 末尾约 30 行指针跟随脚本；不改任何尺寸 / 间距 /
+   圆角 / DOM 结构，整段删除即回退上一版皮肤。
+   ============================================================ */
+@property --lg-mx{syntax:'<percentage>';inherits:false;initial-value:50%}
+@property --lg-my{syntax:'<percentage>';inherits:false;initial-value:-10%}
+:root{
+  --lg-blur:24px;              /* 玻璃背后模糊量 */
+  --lg-sat:190%;               /* 增饱和：玻璃里的景更"湿" */
+  --lg-bri:1.05;               /* 提亮，模拟聚光 */
+  --lg-ctr:1.06;
+  /* 高光位置：不支持 @property 的浏览器靠这两个值兜底 */
+  --lg-mx:50%;--lg-my:-10%;
+  --lg-rim:rgba(255,255,255,.55);
+  --lg-a1:.46;--lg-a2:.13;--lg-a3:.03;   /* 高光三层透明度 */
+  --lg-top:rgba(255,255,255,.42);        /* 上缘厚度亮带 */
+  --lg-bot:rgba(255,255,255,.12);        /* 下缘反光 */
+  --lg-c1:rgba(120,200,255,.26);         /* 左缘冷色散 */
+  --lg-c2:rgba(255,168,214,.20);         /* 右缘暖色散 */
+  /* 玻璃厚度：上缘亮线 / 下缘反光 / 左右细边 / 顶部内辉 / 底部内阴影 */
+  --lg-inner:inset 0 1px 0 rgba(255,255,255,.96),inset 0 -1px 0 rgba(255,255,255,.30),inset 1px 0 0 rgba(255,255,255,.20),inset -1px 0 0 rgba(255,255,255,.20),inset 0 22px 30px -26px rgba(255,255,255,.85),inset 0 -26px 36px -32px rgba(15,23,42,.32);
+  --lg-inner-hot:inset 0 1px 0 #fff,inset 0 -1px 0 rgba(255,255,255,.44),inset 1px 0 0 rgba(255,255,255,.34),inset -1px 0 0 rgba(255,255,255,.34),inset 0 26px 34px -26px #fff,inset 0 -26px 36px -32px rgba(15,23,42,.38);
+  --lg-drop:0 12px 32px rgba(15,23,42,.16),0 2px 8px rgba(15,23,42,.08);
+  --lg-drop-hot:0 16px 40px rgba(15,23,42,.20),0 3px 10px rgba(15,23,42,.10);
+  /* 更通透的玻璃底：让背后景物真的透出来 */
+  --glass-bg:rgba(255,255,255,.56);
+  --glass-bg-soft:rgba(255,255,255,.38);
+  --lg-solid:rgba(255,255,255,.82);   /* 浮层用的更实底色 */
+  /* 背景环境光：透过玻璃看到的冷暖光晕 */
+  --lg-glow1:rgba(120,190,255,.20);
+  --lg-glow2:rgba(255,150,200,.15);
+  --lg-glow3:rgba(255,214,150,.13);
+  --lg-tint-bg:rgba(255,255,255,.42);
+}
+[data-theme=dark]{
+  --lg-sat:160%;--lg-bri:1.07;--lg-ctr:1.02;
+  --lg-rim:rgba(255,255,255,.24);
+  --lg-a1:.20;--lg-a2:.06;--lg-a3:.015;
+  --lg-top:rgba(255,255,255,.16);
+  --lg-bot:rgba(255,255,255,.05);
+  --lg-c1:rgba(120,200,255,.30);
+  --lg-c2:rgba(255,168,214,.24);
+  --lg-inner:inset 0 1px 0 rgba(255,255,255,.44),inset 0 -1px 0 rgba(255,255,255,.10),inset 1px 0 0 rgba(255,255,255,.10),inset -1px 0 0 rgba(255,255,255,.10),inset 0 22px 30px -26px rgba(255,255,255,.32),inset 0 -26px 36px -32px rgba(0,0,0,.60);
+  --lg-inner-hot:inset 0 1px 0 rgba(255,255,255,.62),inset 0 -1px 0 rgba(255,255,255,.16),inset 1px 0 0 rgba(255,255,255,.18),inset -1px 0 0 rgba(255,255,255,.18),inset 0 26px 34px -26px rgba(255,255,255,.42),inset 0 -26px 36px -32px rgba(0,0,0,.68);
+  --lg-drop:0 12px 32px rgba(0,0,0,.42),0 2px 8px rgba(0,0,0,.26);
+  --lg-drop-hot:0 16px 42px rgba(0,0,0,.50),0 3px 10px rgba(0,0,0,.30);
+  --glass-bg:rgba(18,23,32,.52);
+  --glass-bg-soft:rgba(18,23,32,.40);
+  --lg-solid:rgba(20,25,35,.84);
+  --lg-glow1:rgba(90,160,255,.22);
+  --lg-glow2:rgba(255,120,190,.18);
+  --lg-glow3:rgba(255,200,130,.14);
+  --lg-tint-bg:rgba(10,14,20,.36);
+}
+/* 背景层：在暗色遮罩上再铺三团极淡的环境光，玻璃透出来的颜色才活 */
+.bg-mask{
+  background-image:
+    radial-gradient(58vw 58vh at 12% 16%,var(--lg-glow1),transparent 62%),
+    radial-gradient(52vw 52vh at 88% 84%,var(--lg-glow2),transparent 64%),
+    radial-gradient(46vw 46vh at 74% 10%,var(--lg-glow3),transparent 60%);
+}
+/* 玻璃面：上缘厚度带 + 下缘反光 + 指针高光 + 原有斜向光晕 + 毛玻璃 + 厚度高光 */
+header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer,#app>.hint,.tabs button,.thread-tools button,.edtools button,.btn.ghost{
+  background-image:
+    linear-gradient(118deg,rgba(255,255,255,0) 22%,rgba(255,255,255,.10) 37%,rgba(255,255,255,.03) 46%,rgba(255,255,255,0) 58%),
+    linear-gradient(180deg,var(--lg-top) 0,rgba(255,255,255,0) 16px),
+    linear-gradient(0deg,var(--lg-bot) 0,rgba(255,255,255,0) 10px),
+    radial-gradient(120% 140% at var(--lg-mx) var(--lg-my),rgba(255,255,255,var(--lg-a1)) 0%,rgba(255,255,255,var(--lg-a2)) 26%,rgba(255,255,255,var(--lg-a3)) 50%,rgba(255,255,255,0) 68%),
+    var(--glass-sheen);
+  -webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri)) contrast(var(--lg-ctr));
+  backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-sat)) brightness(var(--lg-bri)) contrast(var(--lg-ctr));
+  box-shadow:inset 1px 0 0 var(--lg-c1),inset -1px 0 0 var(--lg-c2),var(--lg-inner),var(--lg-drop);
+}
+/* 浮层（下拉菜单 / @列表 / 表情 / 弹窗 / 回到顶部）：底色更实，浮在内容上也要看得清 */
+.umenu,.at-list,.emoji-picker,#modal .box,#toTop{background-color:var(--lg-solid)}
+/* 玻璃边框：统一成更亮的描边，像玻璃边缘一闪 */
+.card,.post,.stat,.stat-bar,#sidebar,.emoji-picker,.at-list,.umenu,footer,#app>.hint,#modal .box,.tabs button,.thread-tools button,.edtools button,header{border-color:var(--lg-rim)}
+/* 指针移上去时整块玻璃"更亮一点"，像被照亮（#sidebar 只在桌面端加过渡，避免覆盖移动端抽屉的 transform 动画） */
+.card,.post,footer{transition:box-shadow .25s ease}
+@media(min-width:1024px){#sidebar{transition:box-shadow .25s ease}}
+.card:hover,.post:hover,#sidebar:hover,footer:hover{
+  box-shadow:inset 1px 0 0 var(--lg-c1),inset -1px 0 0 var(--lg-c2),var(--lg-inner-hot),var(--lg-drop-hot);
+}
+/* 顶栏流动的液态反光（全站唯一常驻动画，只有一个元素，代价可控） */
+header::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(105deg,transparent 34%,rgba(255,255,255,.30) 46%,rgba(255,255,255,.06) 53%,transparent 64%);
+  background-size:240% 100%;background-repeat:no-repeat;
+  animation:lg-flow 9s linear infinite;opacity:.7;
+}
+@keyframes lg-flow{from{background-position:180% 0}to{background-position:-80% 0}}
+/* 选中态：保留原绿色投影，只加玻璃厚度感 */
+.tabs button.on,.thread-tools button.on{box-shadow:var(--lg-inner),0 4px 14px rgba(22,163,74,.28)}
+/* 弹层：更外扩的落影，浮在页面之上 */
+#modal .box{box-shadow:inset 1px 0 0 var(--lg-c1),inset -1px 0 0 var(--lg-c2),var(--lg-inner),0 28px 70px rgba(0,0,0,.38),0 8px 20px rgba(0,0,0,.20)}
+/* 输入区：内凹的玻璃 */
+textarea,input[type=text],input[type=password],select{
+  -webkit-backdrop-filter:blur(10px) saturate(160%);
+  backdrop-filter:blur(10px) saturate(160%);
+  box-shadow:inset 0 1px 2px rgba(15,23,42,.10),inset 0 -1px 0 rgba(255,255,255,.45);
+}
+[data-theme=dark] textarea,[data-theme=dark] input[type=text],[data-theme=dark] input[type=password],[data-theme=dark] select{
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.45),inset 0 -1px 0 rgba(255,255,255,.08);
+}
+/* 小屏：模糊降档，保滚动流畅 */
+@media(max-width:640px){
+  :root{--lg-blur:12px;--lg-sat:170%}
+  [data-theme=dark]{--lg-blur:12px;--lg-sat:145%}
+}
+/* 不支持 backdrop-filter：玻璃必须退回实色底，否则文字糊在照片上 */
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  :root{--glass-bg:rgba(255,255,255,.90);--glass-bg-soft:rgba(255,255,255,.80);--lg-solid:rgba(255,255,255,.94)}
+  [data-theme=dark]{--glass-bg:rgba(18,23,32,.94);--glass-bg-soft:rgba(18,23,32,.88);--lg-solid:rgba(18,23,32,.96)}
+}
+/* 无障碍：要求减少透明时退回近乎实色，取消滤镜、高光与流光 */
+@media(prefers-reduced-transparency:reduce){
+  :root{--glass-bg:rgba(255,255,255,.94);--glass-bg-soft:rgba(255,255,255,.88);--lg-solid:rgba(255,255,255,.97)}
+  [data-theme=dark]{--glass-bg:rgba(18,23,32,.95);--glass-bg-soft:rgba(18,23,32,.90);--lg-solid:rgba(18,23,32,.97)}
+  header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer,#app>.hint,.tabs button,.thread-tools button,.edtools button,.btn.ghost{
+    -webkit-backdrop-filter:none;backdrop-filter:none;background-image:none;box-shadow:var(--lg-drop);
+  }
+  .bg-mask{background-image:none}
+}
+@media(prefers-reduced-motion:reduce){
+  header::after{animation:none;opacity:0}
+}
+/* ============================================================
+   WebGL 液态玻璃层（public/liquid-glass.js 成功接管时启用）
+   canvas 位于背景层与内容层之间，玻璃面由着色器画；元素自身
+   只留极淡 tint 保证文字可读。失效时自动退回上面的 CSS 玻璃。
+   ============================================================ */
+#lg-canvas{position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;display:block}
+html.lg-on header,html.lg-on .card,html.lg-on .post,html.lg-on .stat,html.lg-on .stat-bar,html.lg-on #sidebar,html.lg-on #modal .box,html.lg-on .emoji-picker,html.lg-on .at-list,html.lg-on .umenu,html.lg-on #toTop,html.lg-on footer,html.lg-on #app>.hint{
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  background-image:none!important;
+  background-color:var(--lg-tint-bg)!important;
+  box-shadow:none!important;
+  border-color:var(--lg-rim)!important;
+}
+html.lg-on header::after{display:none!important}
+html.lg-on .card:hover,html.lg-on .post:hover,html.lg-on #sidebar:hover,html.lg-on footer:hover{box-shadow:none!important}
 </style>
 <link rel="alternate" type="application/rss+xml" title="企鹅窝" href="/rss">
 <link rel="preload" as="image" href="/202606191805131553675.jpg" fetchpriority="high">
@@ -2607,11 +2754,42 @@ async function togglePin(tid, pinned){
   catch(e){ alert(e.message); }
 }
 
+/* ---- 液态玻璃 2.0：高光跟随指针（只在精确指针 + 允许动效时启用） ---- */
+(function(){
+  var SEL='header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer,#app>.hint,.tabs button,.thread-tools button,.edtools button,.btn.ghost';
+  if(!window.matchMedia||!window.matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+  if(window.matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  var cur=null,pending=0,px=0,py=0;
+  function paint(){
+    pending=0;
+    if(!cur) return;
+    var r=cur.getBoundingClientRect();
+    if(!r.width||!r.height) return;
+    var x=(px-r.left)/r.width*100, y=(py-r.top)/r.height*100;
+    cur.style.setProperty('--lg-mx',(x<-20?-20:x>120?120:x).toFixed(1)+'%');
+    cur.style.setProperty('--lg-my',(y<-20?-20:y>120?120:y).toFixed(1)+'%');
+  }
+  document.addEventListener('pointermove',function(e){
+    var t=e.target&&e.target.closest?e.target.closest(SEL):null;
+    if(t!==cur){
+      if(cur){ cur.style.removeProperty('--lg-mx'); cur.style.removeProperty('--lg-my'); }
+      cur=t;
+    }
+    if(!cur) return;
+    px=e.clientX; py=e.clientY;
+    if(!pending) pending=requestAnimationFrame(paint);
+  },{passive:true});
+  document.addEventListener('pointerleave',function(){
+    if(cur){ cur.style.removeProperty('--lg-mx'); cur.style.removeProperty('--lg-my'); cur=null; }
+  },{passive:true});
+})();
+
 refreshMe().then(()=>loadSiteSettings()).then(()=>loadAds()).then(()=>{
   const oe = new URLSearchParams(location.search).get('oauth_error');
   if(oe){ history.replaceState(null,'',location.pathname); setTimeout(()=>alert('GitHub 登录失败：'+decodeURIComponent(oe)), 300); }
   loadSidebar(); route();
 });
 </script>
+<script src="/liquid-glass.js" defer></script>
 </body>
 </html>

@@ -107,8 +107,6 @@
     'uniform float u_shadowSpread;',
     'uniform float u_shadowOffY;',
     'uniform float u_bevelMode;',
-    'uniform vec2 u_mouse;',
-    'uniform float u_mouseSpec;',
     'varying vec2 v_localPx;',
     'varying vec2 v_screenPx;',
     'float rrSDF(vec2 p, vec2 b, float r) {',
@@ -207,9 +205,6 @@
     '  vec3 H4 = normalize(L4 + V);',
     '  float sp4 = pow(max(dot(N, H4), 0.0), 120.0) * 0.6;',
     '  float totalSpec = (sp1 + sp2 + spB + sp4) * u_spec;',
-    '  vec3 Lm = normalize(vec3((u_mouse - v_screenPx) / 260.0, 1.0));',
-    '  vec3 Hm = normalize(Lm + V);',
-    '  totalSpec += pow(max(dot(N, Hm), 0.0), 70.0) * u_mouseSpec;',
     '  float borderWidth = 1.5;',
     '  float innerStroke = smoothstep(-borderWidth - 1.0, -borderWidth, sdf)',
     '                   * (1.0 - smoothstep(-1.0, 0.0, sdf));',
@@ -228,15 +223,17 @@
     '}'
   ].join('\n');
 
+  /* 折射/色散/饱和度等沿用本站原调参；只把「高光」换成 ybouane/liquidglass 官方那套：
+     specular 0 + edgeHighlight 0.05 + 去掉指针跟随高光，高光只留着色器里最淡的边缘线。 */
   var CFG = {
     light: {
-      refract: 2.1, chroma: 0.14, edgeHL: 0.35, spec: 0.18, fresnel: 1.0,
+      refract: 2.1, chroma: 0.14, edgeHL: 0.05, spec: 0.0, fresnel: 1.0,
       distort: 0.0, sat: 0.10, tint: 0.03, zRadius: 60, brightness: 0.05,
       shadowAlpha: 0.28, shadowSpread: 16, shadowOffY: 4,
       bgDark: 0.72, bgTint: [0.0165, 0.0252, 0.0462]
     },
     dark: {
-      refract: 2.1, chroma: 0.15, edgeHL: 0.38, spec: 0.20, fresnel: 1.0,
+      refract: 2.1, chroma: 0.15, edgeHL: 0.05, spec: 0.0, fresnel: 1.0,
       distort: 0.0, sat: 0.10, tint: 0.05, zRadius: 60, brightness: 0.05,
       shadowAlpha: 0.42, shadowSpread: 20, shadowOffY: 4,
       bgDark: 0.45, bgTint: [0, 0, 0]
@@ -251,7 +248,6 @@
   var nodes = [];
   var radiusCache = new Map();
   var queued = false, started = false;
-  var mouseX = -9999, mouseY = -9999, mouseAt = 0, hasMouse = false;
 
   function q(sel) { return document.querySelector(sel); }
 
@@ -452,8 +448,6 @@
     gl.uniform1f(locs.glass.u_shadowSpread, cfg.shadowSpread);
     gl.uniform1f(locs.glass.u_shadowOffY, cfg.shadowOffY);
     gl.uniform1f(locs.glass.u_bevelMode, 0.0);
-    gl.uniform2f(locs.glass.u_mouse, mouseX, mouseY);
-    gl.uniform1f(locs.glass.u_mouseSpec, hasMouse ? 0.5 : 0.0);
     gl.uniform1f(locs.glass.u_pad, PAD);
 
     for (var i = 0; i < nodes.length; i++) {
@@ -531,7 +525,7 @@
     locs.glass = locsOf(progs.glass, ['u_bgTex', 'u_blurTex', 'u_size', 'u_radius', 'u_res',
       'u_center', 'u_pad', 'u_off', 'u_draw', 'u_bgTint', 'u_bgDark', 'u_refract', 'u_chroma',
       'u_edgeHL', 'u_spec', 'u_fresnel', 'u_distort', 'u_sat', 'u_tint', 'u_zRadius',
-      'u_brightness', 'u_alpha', 'u_shadowAlpha', 'u_shadowSpread', 'u_shadowOffY', 'u_bevelMode', 'u_mouse', 'u_mouseSpec']);
+      'u_brightness', 'u_alpha', 'u_shadowAlpha', 'u_shadowSpread', 'u_shadowOffY', 'u_bevelMode']);
     locs.blit = locsOf(progs.blit, ['u_tex', 'u_scale', 'u_offset']);
     locs.blur = locsOf(progs.blur, ['u_tex', 'u_dir']);
 
@@ -557,13 +551,6 @@
       setTimeout(function () { resize(); schedule(); }, 250);
     }, { passive: true });
     window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('pointermove', function (e) {
-      var now = Date.now();
-      if (now - mouseAt < 50) return;
-      mouseAt = now;
-      mouseX = e.clientX; mouseY = e.clientY; hasMouse = true;
-      schedule();
-    }, { passive: true });
 
     var mo = new MutationObserver(function () {
       refreshNodes();

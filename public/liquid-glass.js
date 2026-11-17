@@ -19,7 +19,8 @@
   if (window.__liquidGlassBooted) return;
   window.__liquidGlassBooted = true;
 
-  var SEL = 'header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer,#app>.hint';
+  var SEL = 'header,.card,.post,.stat,.stat-bar,#sidebar,#modal .box,.emoji-picker,.at-list,.umenu,#toTop,footer,#app>.hint,'
+    + '.tabs button:not(.on),.thread-tools button:not(.on),.edtools button,.btn.ghost:not(.on),.searchbar input[type=text]';
   var PAD = 28;
   var DPR_CAP = 2;
 

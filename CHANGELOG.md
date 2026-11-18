@@ -8,6 +8,7 @@
 - 一键「📋 复制」：优先 Clipboard API，失败回退 `document.execCommand`，成功后按钮短暂显示「✅ 已复制」
 - 数据：新表 `daily_quotes`（迁移 `026-daily-quote.sql`，内置 40 条种子，可重复执行）；文字来源可用 D1 增删
 - 开关：`settings.daily_quote_enabled`，后台「站点设置」页可开启/关闭；关闭后接口返回 `{enabled:false}`、卡片自动隐藏
+- 紧凑化：去掉署名行（原「—— 出处」），标题/日期/正文/按钮字号与内边距整体缩小，减少首屏占位
 
 ## 2026-11-17
 

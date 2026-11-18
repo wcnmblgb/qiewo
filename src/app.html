@@ -301,6 +301,23 @@ footer{margin-bottom:24px}
 @keyframes mc-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.mc-card.on .mc-dot,.mc-refresh.loading .mc-ic{animation:none}}
 @media (max-width:520px){.mc-stats{gap:12px}.mc-card{padding-right:48px}}
+/* ---- 5.1 每日一言卡片 ---- */
+.dq-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dq-title{font-weight:600;font-size:15px}
+.dq-date{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.dq-body{margin:12px 0 8px;padding:12px 16px;border-left:3px solid var(--primary);border-radius:0 12px 12px 0;background-color:var(--glass-bg-soft);font-size:15px;line-height:1.7;word-break:break-word;transition:opacity .18s}
+.dq-body.fading{opacity:.35}
+.dq-loading{color:var(--muted);font-size:14px}
+.dq-foot{font-size:12px;color:var(--muted);text-align:right;min-height:16px}
+.dq-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.dq-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--glass-line);background-color:var(--glass-bg-soft);color:var(--text);border-radius:10px;padding:8px 14px;font-size:13px;cursor:pointer;transition:color .15s,border-color .15s}
+.dq-btn:hover{color:var(--primary);border-color:var(--primary)}
+.dq-btn:disabled{opacity:.6;cursor:default}
+.dq-btn .dq-ic{display:inline-block}
+.dq-btn.loading .dq-ic{animation:dq-spin .8s linear infinite}
+@keyframes dq-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.dq-btn.loading .dq-ic{animation:none}}
+@media (max-width:520px){.dq-body{font-size:14px;padding:10px 12px}.dq-actions{width:100%}.dq-btn{flex:1;justify-content:center}}
 .thread .mt{flex-wrap:wrap}
 .thread .mt>span{white-space:nowrap}
 /* 移动端侧边抽屉：贴左不圆左上角 */
@@ -2089,6 +2106,7 @@ async function viewAdmin(tab){
         '<div class="setrow"><label>Logo（emoji，如 💬）</label><input type="text" id="as-logo" value="'+esc(s.site_logo)+'"></div>'+
         '<div class="setrow"><label>站点简介</label><input type="text" id="as-desc" value="'+esc(s.site_desc||'')+'" placeholder="一句话介绍"></div>'+
         '<div class="setrow"><label>全站公告（留空不显示）</label><textarea id="as-ann" style="min-height:60px" placeholder="显示在首页顶部的公告…">'+esc(s.announcement||'')+'</textarea></div>'+
+        '<div class="setrow"><label>每日一言（首页卡片）</label><select id="as-dq"><option value="1"'+(s.daily_quote_enabled==='0'?'':' selected')+'>开启</option><option value="0"'+(s.daily_quote_enabled==='0'?' selected':'')+'>关闭</option></select></div>'+
         '<button class="btn" onclick="saveSiteSettings()">保存设置</button></div>';
     }
   }catch(e){ html += '<div class="hint">'+esc(e.message)+'</div>'; }
@@ -2286,6 +2304,7 @@ async function saveSiteSettings(){
     site_logo: document.getElementById('as-logo').value.trim() || '💬',
     site_desc: document.getElementById('as-desc').value.trim(),
     announcement: document.getElementById('as-ann').value.trim(),
+    daily_quote_enabled: document.getElementById('as-dq').value,
   };
   try{
     await api('/api/admin/settings', {method:'PUT', body:JSON.stringify(data)});
@@ -2439,12 +2458,89 @@ async function loadMcStatus(byUser){
   }
 }
 
+/* ---------- 每日一言卡片 ---------- */
+let dqText = '';
+let dqCopyTimer = null;
+function dailyQuoteCard(){
+  return '<div class="card dq-card" id="dq-card">'+
+    '<div class="dq-head"><span class="dq-title">💬 每日一言</span><span class="dq-date" id="dq-date"></span></div>'+
+    '<div class="dq-body" id="dq-body"><span class="dq-loading">加载中…</span></div>'+
+    '<div class="dq-foot" id="dq-author"></div>'+
+    '<div class="dq-actions">'+
+      '<button class="dq-btn" id="dq-refresh" onclick="loadDailyQuote(true)" title="随机换一句">'+
+        '<span class="dq-ic">⟳</span>换一句</button>'+
+      '<button class="dq-btn" id="dq-copy" onclick="copyDailyQuote()" title="复制这句话">📋 复制</button>'+
+    '</div>'+
+  '</div>';
+}
+async function loadDailyQuote(byUser){
+  const card = document.getElementById('dq-card');
+  if(!card) return;
+  const body = document.getElementById('dq-body');
+  const dateEl = document.getElementById('dq-date');
+  const authorEl = document.getElementById('dq-author');
+  const btn = document.getElementById('dq-refresh');
+  if(!body || !dateEl || !authorEl) return;
+  if(byUser && btn && btn.classList.contains('loading')) return;
+  if(byUser){
+    btn.classList.add('loading');
+    body.classList.add('fading');
+  }
+  try{
+    const j = await api('/api/daily-quote' + (byUser ? '?r=1' : ''));
+    if(!j.enabled){ card.style.display = 'none'; return; }
+    card.style.display = '';
+    dqText = j.text || '';
+    body.textContent = dqText || '今天也要好好生活呀。';
+    dateEl.textContent = j.date || '';
+    authorEl.textContent = j.author ? '—— ' + j.author : '';
+  }catch(e){
+    dqText = '';
+    body.textContent = '一言暂时获取失败，点「换一句」重试';
+    authorEl.textContent = '';
+    dateEl.textContent = '';
+  }finally{
+    if(byUser) body.classList.remove('fading');
+    if(btn) btn.classList.remove('loading');
+  }
+}
+function copyDailyQuote(){
+  const body = document.getElementById('dq-body');
+  const txt = dqText || (body ? body.textContent : '');
+  if(!txt || txt === '加载中…') return;
+  const btn = document.getElementById('dq-copy');
+  const flash = (t)=>{ if(!btn) return; clearTimeout(dqCopyTimer); btn.textContent = t; dqCopyTimer = setTimeout(()=>{ if(btn) btn.textContent = '📋 复制'; }, 1600); };
+  const done = ()=>{ if(btn) btn.textContent = '✅ 已复制'; clearTimeout(dqCopyTimer); dqCopyTimer = setTimeout(()=>{ if(btn) btn.textContent = '📋 复制'; }, 1600); };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done).catch(()=>{ fallbackCopy(txt) ? done() : flash('⚠️ 复制失败'); });
+    }else{
+      fallbackCopy(txt) ? done() : flash('⚠️ 复制失败');
+    }
+  }catch(e){ fallbackCopy(txt) ? done() : flash('⚠️ 复制失败'); }
+}
+function fallbackCopy(text){
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){ return false; }
+}
+
 /* ---------- 首页：最新主题 + 版块列表 ---------- */
 async function viewBoards(){
   app.innerHTML = '<div class="hint">加载中…</div>';
   setTitle('');
   const [bj, lj] = await Promise.all([api('/api/boards'), api('/api/threads/latest').catch(()=>({threads:[]}))]);
-  let html = verifyBanner() + announcementBanner() + mcStatusCard();
+  let html = verifyBanner() + announcementBanner() + mcStatusCard() + dailyQuoteCard();
   try{
     const st = await api('/api/stats');
     html += '<div class="stat-bar"><span><b>'+st.todayThreads+'</b>今日主题</span><span><b>'+st.todayPosts+'</b>今日回帖</span><span><b>'+st.todayUsers+'</b>今日新用户</span><span><b>'+st.users+'</b>总用户</span><span><b>'+st.threads+'</b>总主题</span></div>';
@@ -2466,6 +2562,7 @@ async function viewBoards(){
   }
   app.innerHTML = html;
   loadMcStatus();
+  loadDailyQuote();
 }
 function showAddBoard(){
   showModal('<h3>新建版块</h3><div class="err" id="m-err"></div>'+

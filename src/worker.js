@@ -1621,6 +1621,33 @@ export default {
         return json({ ok: true });
       }
 
+      // ---------- 每日一言 ----------
+      // GET /api/daily-quote      当天固定一句（北京时间按天取模，全站一致）
+      // GET /api/daily-quote?r=1  随机一句（前端「换一句」按钮）
+      if (seg[0] === 'daily-quote' && seg.length === 1 && method === 'GET') {
+        const enabled = (await getSetting(env, 'daily_quote_enabled', '1')) !== '0';
+        if (!enabled) return json({ enabled: false });
+        const day = beijingDate();
+        const random = url.searchParams.get('r') === '1';
+        let row = null;
+        if (random) {
+          row = await env.DB.prepare(
+            'SELECT id, text, author FROM daily_quotes WHERE enabled=1 ORDER BY RANDOM() LIMIT 1'
+          ).first().catch(() => null);
+        } else {
+          const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM daily_quotes WHERE enabled=1').first().catch(() => null);
+          const n = (c && c.n) || 0;
+          if (n > 0) {
+            const idx = parseInt(day.replace(/-/g, ''), 10) % n;
+            row = await env.DB.prepare(
+              'SELECT id, text, author FROM daily_quotes WHERE enabled=1 ORDER BY id LIMIT 1 OFFSET ?'
+            ).bind(idx).first().catch(() => null);
+          }
+        }
+        if (!row) return json({ enabled: true, date: day, text: '今天也要好好生活呀。', author: '企鹅窝', id: 0, random });
+        return json({ enabled: true, date: day, text: row.text, author: row.author || '', id: row.id, random });
+      }
+
       // ---------- 公开统计 ----------
       if (seg[0] === 'stats' && method === 'GET') {
         const day = Date.now() - 86400 * 1000;
@@ -2045,7 +2072,7 @@ export default {
       }
       if (seg[0] === 'admin' && seg[1] === 'settings' && method === 'PUT') {
         const deny = requireAdmin(me); if (deny) return deny;
-        const allowed = ['site_name', 'site_logo', 'site_desc', 'announcement', 'ai_digest_enabled'];
+        const allowed = ['site_name', 'site_logo', 'site_desc', 'announcement', 'ai_digest_enabled', 'daily_quote_enabled'];
         const batch = [];
         for (const k of allowed) {
           if (body[k] !== undefined) {

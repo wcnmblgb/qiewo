@@ -104,6 +104,39 @@ function beijingDate(d) {
   const b = new Date((d || Date.now()) + 8 * 3600 * 1000);
   return b.toISOString().slice(0, 10);
 }
+// 每日一言文案统一来自 https://hi.logacg.com/（hitokoto 接口）。
+// 该站在 CDN 后面，同一 URL 会被缓存几十秒，所以每次都拼随机查询串并带 no-cache 头，
+// 否则「换一句」会反复拿到同一句。失败重试 3 次，仍失败返回 null 交给上层兜底。
+const QUOTE_ENDPOINT = 'https://hi.logacg.com/';
+async function fetchQuote() {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Cache-Control': 'no-cache, no-store, max-age=0',
+    'Pragma': 'no-cache',
+    'Referer': 'https://hi.logacg.com/',
+  };
+  for (let i = 0; i < 3; i++) {
+    // 每次重试都换一个全新 URL，绕开 CDN 的秒级缓存
+    const url = QUOTE_ENDPOINT + '?_=' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try {
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const text = j && typeof j.hitokoto === 'string' ? j.hitokoto.trim() : '';
+      if (!text) continue;
+      // 优先 from_who（作者），空则退回 from（出处）；「未知/原创」不署名
+      let author = (j.from_who || '').trim();
+      if (!author) {
+        const from = (j.from || '').trim();
+        if (from && !/^(未知|原创|无)$/.test(from)) author = from;
+      }
+      return { id: j.id || 0, text, author };
+    } catch (e) {}
+  }
+  return null;
+}
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -1622,30 +1655,15 @@ export default {
       }
 
       // ---------- 每日一言 ----------
-      // GET /api/daily-quote      当天固定一句（北京时间按天取模，全站一致）
-      // GET /api/daily-quote?r=1  随机一句（前端「换一句」按钮）
+      // 文案实时取自 https://hi.logacg.com/，不再读 D1 句子库；
+      // /api/daily-quote 与 /api/daily-quote?r=1（前端「换一句」）都是每次现取一句。
       if (seg[0] === 'daily-quote' && seg.length === 1 && method === 'GET') {
         const enabled = (await getSetting(env, 'daily_quote_enabled', '1')) !== '0';
         if (!enabled) return json({ enabled: false });
         const day = beijingDate();
-        const random = url.searchParams.get('r') === '1';
-        let row = null;
-        if (random) {
-          row = await env.DB.prepare(
-            'SELECT id, text, author FROM daily_quotes WHERE enabled=1 ORDER BY RANDOM() LIMIT 1'
-          ).first().catch(() => null);
-        } else {
-          const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM daily_quotes WHERE enabled=1').first().catch(() => null);
-          const n = (c && c.n) || 0;
-          if (n > 0) {
-            const idx = parseInt(day.replace(/-/g, ''), 10) % n;
-            row = await env.DB.prepare(
-              'SELECT id, text, author FROM daily_quotes WHERE enabled=1 ORDER BY id LIMIT 1 OFFSET ?'
-            ).bind(idx).first().catch(() => null);
-          }
-        }
-        if (!row) return json({ enabled: true, date: day, text: '今天也要好好生活呀。', author: '企鹅窝', id: 0, random });
-        return json({ enabled: true, date: day, text: row.text, author: row.author || '', id: row.id, random });
+        const q = await fetchQuote();
+        if (!q) return json({ enabled: true, date: day, text: '', error: 'quote-unavailable' });
+        return json({ enabled: true, date: day, text: q.text, author: q.author, id: q.id });
       }
 
       // ---------- 公开统计 ----------

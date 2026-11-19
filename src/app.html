@@ -2487,9 +2487,14 @@ async function loadDailyQuote(byUser){
     const j = await api('/api/daily-quote' + (byUser ? '?r=1' : ''));
     if(!j.enabled){ card.style.display = 'none'; return; }
     card.style.display = '';
-    dqText = j.text || '';
-    body.textContent = dqText || '今天也要好好生活呀。';
     dateEl.textContent = j.date || '';
+    if(j.error || !j.text){
+      dqText = '';
+      body.textContent = '一言暂时没取到，点「换一句」重试';
+      return;
+    }
+    dqText = j.text;
+    body.textContent = dqText;
   }catch(e){
     dqText = '';
     body.textContent = '一言暂时获取失败，点「换一句」重试';

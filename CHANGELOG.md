@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2026-11-19
+
+### 每日一言改为实时接口
+- 文案统一改为每次实时请求 `https://hi.logacg.com/`（hitokoto 接口），不再读 D1 `daily_quotes` 句子库
+- 每次请求拼随机查询串并带 `Cache-Control: no-cache, no-store`，绕过对方服务端的秒级缓存，`⟳ 换一句` 能真的换
+- 失败重试 3 次、单次 8s 超时；仍失败时卡片提示「一言暂时没取到，点「换一句」重试」，不再显示占位句
+- 署名优先取 `from_who`，为空退回 `from`；`未知 / 原创 / 无` 不署名
+- `settings.daily_quote_enabled` 开关保留：关闭后接口返回 `{enabled:false}`、卡片隐藏
+
 ## 2026-11-18
 
 ### 每日一言

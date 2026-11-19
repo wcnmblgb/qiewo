@@ -308,6 +308,7 @@ footer{margin-bottom:24px}
 .dq-body{margin:8px 0 6px;padding:9px 13px;border-left:3px solid var(--primary);border-radius:0 10px 10px 0;background-color:var(--glass-bg-soft);font-size:14px;line-height:1.55;word-break:break-word;transition:opacity .18s}
 .dq-body.fading{opacity:.35}
 .dq-loading{color:var(--muted);font-size:13px}
+.dq-author{margin:-2px 12px 6px 0;text-align:right;font-size:12px;line-height:1.4;color:var(--muted);word-break:break-word}
 .dq-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .dq-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--glass-line);background-color:var(--glass-bg-soft);color:var(--text);border-radius:9px;padding:5px 11px;font-size:12px;cursor:pointer;transition:color .15s,border-color .15s}
 .dq-btn:hover{color:var(--primary);border-color:var(--primary)}
@@ -2464,6 +2465,7 @@ function dailyQuoteCard(){
   return '<div class="card dq-card" id="dq-card">'+
     '<div class="dq-head"><span class="dq-title">💬 每日一言</span><span class="dq-date" id="dq-date"></span></div>'+
     '<div class="dq-body" id="dq-body"><span class="dq-loading">加载中…</span></div>'+
+    '<div class="dq-author" id="dq-author" style="display:none"></div>'+
     '<div class="dq-actions">'+
       '<button class="dq-btn" id="dq-refresh" onclick="loadDailyQuote(true)" title="随机换一句">'+
         '<span class="dq-ic">⟳</span>换一句</button>'+
@@ -2477,7 +2479,14 @@ async function loadDailyQuote(byUser){
   const body = document.getElementById('dq-body');
   const dateEl = document.getElementById('dq-date');
   const btn = document.getElementById('dq-refresh');
+  const authorEl = document.getElementById('dq-author');
   if(!body || !dateEl) return;
+  const setAuthor = (a)=>{
+    if(!authorEl) return;
+    const t = String(a == null ? '' : a).trim();
+    authorEl.textContent = t ? ('—— ' + t) : '';
+    authorEl.style.display = t ? '' : 'none';
+  };
   if(byUser && btn && btn.classList.contains('loading')) return;
   if(byUser){
     btn.classList.add('loading');
@@ -2491,14 +2500,17 @@ async function loadDailyQuote(byUser){
     if(j.error || !j.text){
       dqText = '';
       body.textContent = '一言暂时没取到，点「换一句」重试';
+      setAuthor('');
       return;
     }
     dqText = j.text;
     body.textContent = dqText;
+    setAuthor(j.author);
   }catch(e){
     dqText = '';
     body.textContent = '一言暂时获取失败，点「换一句」重试';
     dateEl.textContent = '';
+    setAuthor('');
   }finally{
     if(byUser) body.classList.remove('fading');
     if(btn) btn.classList.remove('loading');
